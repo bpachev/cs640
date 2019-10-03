@@ -1,8 +1,9 @@
 from os import listdir
 from argparse import ArgumentParser, FileType
 import numpy as np
-from features import grayscale, get_sift
+from features import grayscale, get_sift, get_hog, lbp_transform
 from sklearn.neighbors import BallTree
+from sklearn.decomposition import PCA
 
 """
 A file to compute features for all images and store in an npz archive.
@@ -24,8 +25,6 @@ def category_info(files):
 def sift_interest(args, progress_iters=50):
 	feat_list = []
 	lengths = np.zeros(len(args.files), dtype=np.int64)
-	train_mask, labels = category_info(args.files)
-	print train_mask, labels
 
 	for i,f in enumerate(args.files):
 		img = grayscale(f)
@@ -34,7 +33,7 @@ def sift_interest(args, progress_iters=50):
 		feat_list.append(feats)
 		if i and i%progress_iters == 0: print "Processed image ",i
 
-	return {'features':np.vstack(feat_list), 'lengths':lengths, 'train_mask':train_mask, 'labels':labels}
+	return {'features':np.vstack(feat_list), 'lengths':lengths}
 
 def compute_histogram(image_features, tree):
 	#Try brute-forcing the nearest center
@@ -68,6 +67,34 @@ def quantize(args, progress_iters=20):
 		start_ind = inds[i]
 	return {'features':final_feats, 'labels':feature_data['labels'], 'train_mask':feature_data['train_mask']}
 
+def hog(args):
+	mat = None
+	nfiles = len(args.files)
+	for i,f in enumerate(args.files):
+		vec = get_hog(grayscale(f), shape=(512,512))
+		if mat is None:
+			mat = np.zeros((nfiles, vec.size))
+		mat[i,:] = vec
+		if i and i % 50 == 0: print "Completed ",i
+	#There are usually a ridiculous amount of HOG features
+	#Lets chop the dimensionality down a peg or two
+	train_mask, labels = category_info(args.files)
+	reducer = PCA(n_components = 400)
+	reducer.fit(mat[train_mask])
+	feats = reducer.transform(mat)
+	return {'features':feats}
+
+def lbp(args):
+	nfiles = len(args.files)
+	feats = np.zeros((nfiles, 256), dtype=np.int32)
+	for i,f in enumerate(args.files):
+		vec = lbp_transform(grayscale(f))
+		feats[i,:vec.size] = vec
+		if i and i % 50 == 0: print "Completed ",i
+
+	print feats.shape
+	return {'features':feats}
+
 if __name__ == "__main__":
 	parser = ArgumentParser()
 	parser.add_argument("--dirname", default="leedsbutterfly/images")
@@ -82,10 +109,15 @@ if __name__ == "__main__":
 	
 	args.files = [args.dirname+"/"+f for f in listdir(args.dirname)]
 	
-	actions = {"sift_interest":sift_interest,"quantize":quantize}
+	actions = {"sift_interest":sift_interest,"quantize":quantize, "hog":hog,"lbp":lbp}
 	
 	if args.feature_type not in actions: 
 		raise ValueError("Unsupported or unrecognized feature type {}".format(args.feature_type))
 	
 	info = actions[args.feature_type](args)
+	if 'train_mask' not in info or 'labels' not in info:
+			train_mask, labels = category_info(args.files)
+			info['labels'] = labels
+			info['train_mask'] = train_mask
+
 	np.savez(args.outfile, **info)

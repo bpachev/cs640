@@ -1,5 +1,7 @@
 import cv2 as cv
 import numpy as np
+import skimage.feature as sk
+
 
 def grayscale(fname):
 	img = cv.imread(fname)
@@ -41,16 +43,30 @@ def lbp_transform(img):
 		bit_masks[h_start:h_stop,w_start:w_stop] += 2**i * mask
 		bit_masks[h_start+h_offset:h_stop+h_offset, w_start+w_offset:w_stop+w_offset] += 2**(i+4) * (1-mask)
 	
-	print bin(bit_masks[-2,-2])
-	print img[-3:,-3:]
 	return np.bincount(bit_masks.flatten())
 
 sift = cv.xfeatures2d.SIFT_create()
 def get_sift(img, mask=None):
 	return sift.detectAndCompute(img, mask)
 
-#from sys import argv
-#gray = grayscale(argv[1])
+#winSize = (768,1024)
+#blockSize = (128,128)
+#blockStride = (64,64)
+#cellSize = (32,32)
+#nbins = 9
+#print hog.winSize
+#print hog.cellSize
+#print hog.blockSize, hog.blockStride
+def get_hog(img, shape = None):
+	if shape is not None:
+		img = cv.resize(img, shape)
+	return sk.hog(img, pixels_per_cell=(32,32), cells_per_block=(2,2),block_norm='L2-Hys').flatten()
+
+if __name__ == "__main__":
+	from sys import argv
+	gray = grayscale(argv[1])
+
+#print get_hog(gray)
 #print lbp_transform(gray)
 #kp, feats = get_sift(gray)
 #print len(kp), len(feats)

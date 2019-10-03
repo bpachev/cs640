@@ -2,6 +2,7 @@ import numpy as np
 from argparse import ArgumentParser, FileType
 from sklearn.svm import LinearSVC, SVC
 from sklearn.metrics import confusion_matrix
+from sklearn.preprocessing import StandardScaler
 
 def get_dataset(feature_files):
 	train_mask, labels = None, None
@@ -29,6 +30,9 @@ if __name__ == "__main__":
 	
 	trainx, trainy, testx, testy = get_dataset(args.inputfiles)
 	model = LinearSVC(C=.005)
+#	scaler = StandardScaler()
+#	trainx = scaler.fit_transform(trainx)
+#	testx = scaler.transform(testx)
 	model.fit(trainx, trainy)
 	print model.score(testx, testy), "APR"
 	print confusion_matrix(testy, model.predict(testx))
