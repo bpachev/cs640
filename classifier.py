@@ -3,6 +3,7 @@ from argparse import ArgumentParser, FileType
 from sklearn.svm import LinearSVC, SVC
 from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 import xgboost as xgb
 
 def get_dataset(feature_files):
@@ -24,10 +25,16 @@ def get_dataset(feature_files):
 
 def svc(args):
 	trainx, trainy, testx, testy = get_dataset(args.inputfiles)
-	model = LinearSVC(C=.005)
-#	scaler = StandardScaler()
-#	trainx = scaler.fit_transform(trainx)
-#	testx = scaler.transform(testx)
+	model = LinearSVC(C=.001)
+	
+#	reducer = PCA(n_components = 400)
+#	trainx = reducer.fit_transform(trainx)
+#	testx = reducer.transform(testx)
+
+	
+	scaler = StandardScaler()
+	trainx = scaler.fit_transform(trainx)
+	testx = scaler.transform(testx)
 	model.fit(trainx, trainy)
 	print model.score(testx, testy), "APR"
 	print confusion_matrix(testy, model.predict(testx))
@@ -69,6 +76,7 @@ if __name__ == "__main__":
 	#For now, do a simple train-test split
 
 	args = parser.parse_args()
-	test_sklearn_xgb(args)
+	svc(args)
+#	test_sklearn_xgb(args)
 #	print trainx, trainy
 #	print testx, testy
