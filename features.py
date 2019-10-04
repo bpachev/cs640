@@ -62,10 +62,21 @@ def get_hog(img, shape = None):
 		img = cv.resize(img, shape)
 	return sk.hog(img, pixels_per_cell=(32,32), cells_per_block=(2,2),block_norm='L2-Hys').flatten()
 
+def get_segmentation(fname):
+	parts = fname.split("/")
+	img_num = parts[-1].split(".")[0]
+	real_fname = img_num+"_mask.png"
+	mask = grayscale("/".join(parts[:-2]+["segmentations",real_fname]))
+	mask[mask>0] = 1
+	return mask.astype(np.uint8)
+
 if __name__ == "__main__":
 	from sys import argv
-	gray = grayscale(argv[1])
-
+	img = grayscale(argv[1])
+	kp, feats = get_sift(img)
+	print feats.shape
+	kp, feats = get_sift(img, get_segmentation(argv[1]))
+	print feats.shape
 #print get_hog(gray)
 #print lbp_transform(gray)
 #kp, feats = get_sift(gray)

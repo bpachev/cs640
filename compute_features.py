@@ -1,7 +1,7 @@
 from os import listdir
 from argparse import ArgumentParser, FileType
 import numpy as np
-from features import grayscale, get_sift, get_hog, lbp_transform
+from features import grayscale, get_sift, get_hog, lbp_transform, get_segmentation
 from sklearn.neighbors import BallTree
 from sklearn.decomposition import PCA
 
@@ -29,7 +29,9 @@ def sift_interest(args, progress_iters=50):
 	from cv2 import KeyPoint_convert
 	for i,f in enumerate(args.files):
 		img = grayscale(f)
-		kp, feats = get_sift(img)
+		mask = None
+		if args.segment: mask = get_segmentation(f)
+		kp, feats = get_sift(img, mask)
 		lengths[i] = len(kp)
 		kp_coords = KeyPoint_convert(kp)
 		kp_coords[:,0] /= img.shape[1]
@@ -191,6 +193,7 @@ if __name__ == "__main__":
 	#if doing quantization, we need the precomputed cluster centers (and other information)
 	parser.add_argument("--cluster-info", type=FileType('r'))
 	parser.add_argument("--pyramid-levels", type=int, default=0)
+	parser.add_argument("--segment", action="store_true")
 	
 	args = parser.parse_args()
 	
