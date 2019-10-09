@@ -14,12 +14,13 @@ def is_train(f):
 	f = str(f)
 	return int(f.split(".")[0][-1]) % 2
 
-def file_class(f):
+def file_class(f, binary=False):
+	if binary: return int("birds" not in f)
 	return int(str(f).split("/")[-1][:3])
 
-def category_info(files):
+def category_info(files,binary):
 	train_mask = np.array([is_train(f) for f in files], dtype=np.bool)
-	labels = np.array([file_class(f) for f in files], dtype=np.int32)
+	labels = np.array([file_class(f,binary) for f in files], dtype=np.int32)
 	return train_mask, labels
 
 def sift_interest(args, progress_iters=50):
@@ -151,7 +152,7 @@ def fisher(args, progress_iters=20):
 		final_feats[i] = vec
 		start_ind = inds[i]
 #	print final_feats.shape
-	train_mask, labels = category_info(args.files)
+	train_mask, labels = category_info(args.files, args.binary)
 	return {'features':final_feats}
 	
 
@@ -166,7 +167,7 @@ def hog(args):
 		if i and i % 50 == 0: print "Completed ",i
 	#There are usually a ridiculous amount of HOG features
 	#Lets chop the dimensionality down a peg or two
-	train_mask, labels = category_info(args.files)
+	train_mask, labels = category_info(args.files, args.binary)
 	reducer = PCA(n_components = 400)
 	reducer.fit(mat[train_mask])
 	feats = reducer.transform(mat)
@@ -194,10 +195,13 @@ if __name__ == "__main__":
 	parser.add_argument("--cluster-info", type=FileType('r'))
 	parser.add_argument("--pyramid-levels", type=int, default=0)
 	parser.add_argument("--segment", action="store_true")
+	parser.add_argument("--binary",action="store_true")
 	
 	args = parser.parse_args()
 	
 	args.files = [args.dirname+"/"+f for f in listdir(args.dirname)]
+	if args.binary:
+		args.files += ["birds/" + f for f in listdir("birds")]
 	
 	actions = {"sift_interest":sift_interest,"quantize":quantize, "hog":hog,"lbp":lbp, 'fisher':fisher}
 	
@@ -206,7 +210,7 @@ if __name__ == "__main__":
 	
 	info = actions[args.feature_type](args)
 	if 'train_mask' not in info or 'labels' not in info:
-			train_mask, labels = category_info(args.files)
+			train_mask, labels = category_info(args.files, args.binary)
 			info['labels'] = labels
 			info['train_mask'] = train_mask
 

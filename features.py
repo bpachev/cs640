@@ -63,6 +63,7 @@ def get_hog(img, shape = None):
 	return sk.hog(img, pixels_per_cell=(32,32), cells_per_block=(2,2),block_norm='L2-Hys').flatten()
 
 def get_segmentation(fname):
+	if "birds" in fname: return None
 	parts = fname.split("/")
 	img_num = parts[-1].split(".")[0]
 	real_fname = img_num+"_mask.png"
