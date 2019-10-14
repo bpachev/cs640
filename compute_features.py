@@ -4,6 +4,7 @@ import numpy as np
 from features import grayscale, get_sift, get_hog, lbp_transform, get_segmentation
 from sklearn.neighbors import BallTree
 from sklearn.decomposition import PCA
+from math import floor, ceil
 
 """
 A file to compute features for all images and store in an npz archive.
@@ -48,7 +49,71 @@ def compute_histogram(image_features, tree):
 	dist, inds = tree.query(image_features)
 	return np.bincount(inds.flatten())
 
-from math import floor
+def unpackSIFTOctave(kpt):
+    """unpackSIFTOctave(kpt)->(octave,layer,scale)
+    @created by Silencer at 2018.01.23 11:12:30 CST
+    @brief Unpack Sift Keypoint by Silencer
+    @param kpt: cv2.KeyPoint (of SIFT)
+    """
+    _octave = kpt.octave
+    octave = _octave&0xFF
+    layer  = (_octave>>8)&0xFF
+    if octave>=128:
+        octave |= -128
+    if octave>=0:
+        scale = float(1/(1<<octave))
+    else:
+        scale = float(1<<-octave)
+    return (octave, layer, scale)
+
+def get_patch(coord, size, img):
+	x1, x2 = int(floor(max(coord[1]-size,0))), int(min(img.shape[0],ceil(coord[1]+size)))
+	y1, y2 = int(floor(max(coord[0]-size,0))), int(min(img.shape[1],ceil(coord[0]+size)))
+	return img[x1:x2,y1:y2]
+
+def patches(args):
+	if args.cluster_info is None:
+		raise ValueError("To compute SIFT patches for visualization, cluster information is needed")
+	
+	cluster_data = np.load(args.cluster_info)
+	transform_mat = cluster_data['transform_mat']
+	centers = cluster_data['cluster_centers']
+	tree = BallTree(centers)
+	from cv2 import KeyPoint_convert, resize
+	nclusters = len(centers)
+	patches = [[] for i in xrange(nclusters)]
+	#We only want to sample one example of each feature from any given image
+	#We also only want 20 patches for each feature
+	patches_per_cluster = 20
+	for i,f in enumerate(args.files):
+		img = grayscale(f)
+		mask = None
+		if args.segment: mask = get_segmentation(f)
+		kp, feats = get_sift(img, mask)
+		coords = KeyPoint_convert(kp)
+
+		added = set()
+		dist, inds = tree.query(feats.dot(transform_mat))
+		for k, ind in enumerate(inds.flatten()):
+			if ind in added or len(patches[ind]) >= patches_per_cluster: continue
+			patches[ind].append(get_patch(coords[k], kp[k].size, img))
+			added.add(ind)
+		total_samples = sum([len(arr) for arr in patches])
+		print i, total_samples
+		if total_samples >= nclusters*patches_per_cluster*.8: break
+	
+	#Now, we need to aggregate and resize the patches
+	final_dict = {'patch_sizes' : []}
+	for j,arr in enumerate(patches):
+		if not(len(arr)):
+			print "No samples for {}".format(j)
+			continue
+		sizes = [a.shape[0] for a in arr]
+		size = int(1+np.mean(np.array(sizes)))
+		final_dict['patches_'+str(j)] = np.hstack([resize(patch,(size,size)) for patch in arr])
+		final_dict['patch_sizes'].append(size)
+	return final_dict
+
 def compute_spatial_pyramid(image_features, tree, kp_coords, levels, num_feature_types):
 	dist, inds = tree.query(image_features)
 	inds = inds.flatten()
@@ -203,7 +268,7 @@ if __name__ == "__main__":
 	if args.binary:
 		args.files += ["birds/" + f for f in listdir("birds")]
 	
-	actions = {"sift_interest":sift_interest,"quantize":quantize, "hog":hog,"lbp":lbp, 'fisher':fisher}
+	actions = {"sift_interest":sift_interest,"quantize":quantize, "hog":hog,"lbp":lbp, 'fisher':fisher, 'patches':patches}
 	
 	if args.feature_type not in actions: 
 		raise ValueError("Unsupported or unrecognized feature type {}".format(args.feature_type))

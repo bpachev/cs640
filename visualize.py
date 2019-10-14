@@ -39,17 +39,33 @@ def visualize_histograms(ark):
 	plt.imshow(mat)
 	plt.show()
 
+def plot_patches(mat, patch_size):
+	mat = mat.T
+	if patch_size * 10 > mat.shape[0]:
+		print "Less than 10 patches, not plotting"
+		return
+	
+	for i in xrange(1,11):
+		plt.subplot(2,5,i)
+		plt.imshow(mat[i*patch_size:(i+1)*patch_size])
+		plt.yticks([])
+		plt.xticks([])
+	plt.show()
+
 if __name__ == "__main__":
 	parser = ap.ArgumentParser()
 	parser.add_argument("infile", type=ap.FileType('r'))
 	parser.add_argument("--mode", type=str, nargs="?", default="histograms")
+	parser.add_argument("--words", type=int, nargs="+")
 
 	args = parser.parse_args()
 	ark = np.load(args.infile)
 	if args.mode == "histograms":
 		visualize_histograms(ark)
 	elif args.mode == "words":
-		pass
+		print np.argsort(ark['patch_sizes'])[-20:-10]
+		for word in args.words:
+			plot_patches(ark['patches_'+str(word)], ark['patch_sizes'][word])
 	else:
 		raise ValueError("Unrecognized visualization {}".format(args.mode))
 	
