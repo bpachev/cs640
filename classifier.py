@@ -25,7 +25,7 @@ def laymans_confusion_matrix(true, pred):
 def precision_recall(labels, probs):
 	#Need to use cumsum a lot
 	#First, sort the labels by probability
-	labels += np.max(labels)-np.min(labels)
+	labels -= np.min(labels)
 	mask = np.argsort(probs)
 	sorted_labels = labels[mask]
 	sorted_probs = probs[mask]
@@ -41,6 +41,7 @@ def precision_recall(labels, probs):
 	precision[:-1] /= 1.*np.arange(1,len(labels))[::-1]
 	precision[-1] = 1
 	from sklearn.metrics import precision_recall_curve
+#	print recall_vals, precision[::-1][inds]
 	return recall_vals, precision[::-1][inds]
 
 def auc(x,y):
@@ -80,14 +81,10 @@ def plot_precision_recall(labels, probs):
 def svc(args, linear=True):
 	trainx, trainy, testx, testy = get_dataset(args.inputfiles)
 	if linear:
-		model = LinearSVC(C=.001)
+		model = LinearSVC(C=.1)
 	else:
 		model = SVC(C=100)
 	
-#	reducer = PCA(n_components = 400)
-#	trainx = reducer.fit_transform(trainx)
-#	testx = reducer.transform(testx)
-
 	#This results in a significant improvement
 	scaler = StandardScaler()
 	trainx = scaler.fit_transform(trainx)
@@ -95,7 +92,10 @@ def svc(args, linear=True):
 	model.fit(trainx, trainy)
 	print model.score(testx, testy), "APR"
 	preds = model.predict(testx)
-	print laymans_confusion_matrix(testy, preds)
+	confusion = laymans_confusion_matrix(testy, preds)
+	print confusion
+	if args.save_confusion:
+		np.savetxt("data/svc_confusion.csv", confusion, delimiter=",")
 	if max(testy) == 1:
 		plot_precision_recall(testy, model.decision_function(testx))
 
@@ -139,7 +139,11 @@ def voting_classifier(args):
 	scaler = StandardScaler()
 	trainx = scaler.fit_transform(trainx)
 	testx = scaler.transform(testx)
-	model = VotingClassifier([('xgb',xgb.XGBClassifier(njobs=-1, eta=.5, num_boost_round=200)), ('linearsvc',CalibratedClassifierCV(LinearSVC(C=.001))), ('svc',SVC(C=10, probability=True))], voting='soft')
+	if args.voting == "soft":
+		model = VotingClassifier([('xgb',xgb.XGBClassifier(njobs=-1, eta=.5, num_boost_round=200)), ('linearsvc',CalibratedClassifierCV(LinearSVC(C=.001))), ('svc',SVC(C=10, probability=True))], voting='soft')
+	else:
+		model = VotingClassifier([('xgb',xgb.XGBClassifier(njobs=-1, eta=.5, num_boost_round=200)), ('linearsvc',LinearSVC(C=.001)), ('svc',SVC(C=10))])
+		
 	model.fit(trainx, trainy)
 	pred = model.predict(testx)
 	print np.mean(pred==testy)
@@ -153,11 +157,18 @@ def voting_classifier(args):
 if __name__ == "__main__":
 	parser = ArgumentParser()
 	parser.add_argument("inputfiles", nargs="+", type=FileType('r'))
+	parser.add_argument("--voting",nargs=1)
+	parser.add_argument("--xgboost", action="store_true")
+	parser.add_argument("--svc", action="store_true")
+	parser.add_argument("--save-confusion", action="store_true")
 	#For now, do a simple train-test split
 
 	args = parser.parse_args()
-	voting_classifier(args)
-#	svc(args, linear=True)
-#	test_sklearn_xgb(args)
+	if args.voting is not None:
+		voting_classifier(args)
+	if args.svc: svc(args, linear=False)
+	else: svc(args, linear=True)
+	if args.xgboost:
+		test_sklearn_xgb(args)
 #	print trainx, trainy
 #	print testx, testy
